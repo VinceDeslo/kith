@@ -1,27 +1,70 @@
 #![allow(dead_code)]
 #![allow(unused)]
 use std::{collections::HashMap, io::{BufRead, BufReader}, process::{Command, Stdio}};
-use log::{error, info};
+use log::{error, info, debug};
 
-const COLUMNS_LINE: usize = 0;
-const SEPARATORS_LINE: usize = 1;
-const FIRST_ENTRY_LINE: usize = 2;
+enum Lines {
+    Separators,
+    FirstEntry,
+}
 
-const NAME_COLUMN: usize = 0;
-const DESCRIPTION_COLUMN: usize = 1;
-const PROTOCOL_COLUMN: usize = 2;
-const DATABASE_TYPE_COLUMN: usize = 3;
-const URI_COLUMN: usize = 4;
-const ALLOWED_USERS_COLUMN: usize = 5;
-const DATABASE_COLUMN: usize = 6;
-const ROLES_COLUMN: usize = 7;
-const LABELS_COLUMN: usize = 8;
-const CONNECT_COLUMN: usize = 9;
+impl Lines {
+    fn to_usize(&self) -> usize {
+        match self {
+            // Index 0 would be the column names, but these are hard coded instead.
+            Lines::Separators => 1,
+            Lines::FirstEntry => 2,
+        }
+    }
+}
+
+// Column definitions can be found in the Telepor repo
+// https://github.com/gravitational/teleport/blob/abc6511f4016a4695062d53076b96ed1d05fec72/tool/tsh/common/db_print.go#L33
+enum Columns {
+    Name,
+    Description,
+    Protocol,
+    DatabaseType,
+    Uri,
+    AllowedUsers,
+    DatabaseRoles,
+    Labels,
+    Connect,
+}
+
+impl Columns {
+    fn to_usize(&self) -> usize {
+        match self {
+            Columns::Name => 0,
+            Columns::Description => 1,
+            Columns::Protocol => 2,
+            Columns::DatabaseType => 3,
+            Columns::Uri => 4,
+            Columns::AllowedUsers => 5,
+            Columns::DatabaseRoles => 6,
+            Columns::Labels => 7,
+            Columns::Connect => 8,
+        }
+    }
+
+    fn to_string(&self) -> &str {
+        match self {
+            Columns::Name => "Name",
+            Columns::Description => "Description",
+            Columns::Protocol => "Protocol",
+            Columns::DatabaseType => "Database Type",
+            Columns::Uri => "URI",
+            Columns::AllowedUsers => "Allowed Users",
+            Columns::DatabaseRoles => "Database Roles",
+            Columns::Labels => "Labels",
+            Columns::Connect => "Connect",
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Tsh {
     lines: Vec<String>,
-    columns: Vec<String>,
     column_widths: Vec<usize>,
     raw_entries: Vec<String>,
     entries: Vec<DatabaseEntry>,
@@ -35,8 +78,7 @@ struct DatabaseEntry {
     database_type: String,
     uri: String,                                                                           
     allowed_users: Vec<String>,
-    database: String,
-    roles: Vec<String>,
+    database_roles: String,
     labels: HashMap<String, String>,
     connect: String,
 }
@@ -45,7 +87,6 @@ impl Tsh {
     pub fn new() -> Tsh {
         return Tsh {
             lines: vec![],
-            columns: vec![],
             column_widths: vec![],
             raw_entries: vec![],
             entries: vec![],
@@ -98,22 +139,9 @@ impl Tsh {
         }
         
         info!("parsing teleport databases");
-        self.parse_columns();
         self.parse_separators();
         self.parse_raw_entries();
         self.parse_entries();
-    }
-
-    // column names are extracted from the first line of Teleport command output
-    fn parse_columns(&mut self) {
-        info!("parsing columns");
-
-        let column_names = &self.lines[COLUMNS_LINE];
-        
-        self.columns = column_names
-            .split(" ")
-            .map(|name| name.to_string())
-            .collect(); 
     }
 
     // column widths are parsed from the second line of Teleport 
@@ -121,23 +149,29 @@ impl Tsh {
     fn parse_separators(&mut self) {
         info!("parsing separators");
 
-        let column_separators = &self.lines[SEPARATORS_LINE];
+        let column_separators = &self.lines[Lines::Separators.to_usize()];
 
         self.column_widths = column_separators
             .split(" ")
             .map(|separator| separator.len())
+            .filter(|column_width| *column_width != 0)
             .collect();
+
+        debug!("{:?}", self.column_widths);
     }
 
     fn parse_raw_entries(&mut self) {
         info!("parsing raw entries");
 
-        let raw_entries = &self.lines[FIRST_ENTRY_LINE..];
+        let raw_entries = &self.lines[Lines::FirstEntry.to_usize()..];
 
         self.raw_entries = raw_entries
             .into_iter()
             .map(|raw_entry| raw_entry.to_string())
+            .filter(|raw_entry| !raw_entry.is_empty())
             .collect();
+
+        debug!("{:?}", self.raw_entries);
     }
 
     fn parse_entries(&mut self) {
@@ -151,100 +185,120 @@ impl Tsh {
             .map(|raw_entry| {
                 DatabaseEntry { 
                     name: parse_column(
-                        NAME_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::Name,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     description: parse_column(
-                        DESCRIPTION_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::Description,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     protocol: parse_column(
-                        PROTOCOL_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::Protocol,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     database_type: parse_column(
-                        DATABASE_TYPE_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::DatabaseType,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     uri: parse_column(
-                        URI_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::Uri,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     allowed_users: parse_allowed_users(
-                        ALLOWED_USERS_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::AllowedUsers,
+                        &raw_entry,
+                        &column_widths,
                     ),
-                    database: parse_column(
-                        DATABASE_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
-                    ),
-                    roles: parse_roles(
-                        ROLES_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                    database_roles: parse_column(
+                        Columns::DatabaseRoles,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     labels: parse_labels(
-                        LABELS_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::Labels,
+                        &raw_entry,
+                        &column_widths,
                     ),
                     connect: parse_column(
-                        CONNECT_COLUMN,
-                        raw_entry.clone(),
-                        column_widths.clone(),
+                        Columns::Connect,
+                        &raw_entry,
+                        &column_widths,
                     ),
                 }
             })
             .collect();
+
+        debug!("{:?}", self.entries);
     }
 }
 
-// TODO: Need to work on this algorithm
 fn get_column_bounds(column_index: usize, column_widths: Vec<usize>) -> (usize, usize) {
-    match column_index {
-        0 => return (column_index, column_widths[column_index]),
-        _ => {
-            let last_index = column_index - 1;  
-            let sum = column_widths[..last_index]
-                .iter()
-                .sum();
-            return (sum, sum + column_widths[column_index]);
-        }
-    } 
+    let sum = column_widths
+        .iter()
+        .take(column_index)
+        .map(|width| width + 1) // Accomodate the extra space between columns
+        .sum();
+
+    return (sum, sum + column_widths[column_index]);
 }
 
-fn parse_column(column_index: usize, raw_entry: String, column_widths: Vec<usize>) -> String {
-    let bounds = get_column_bounds(column_index, column_widths);
+fn parse_column(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> String {
+    info!("Parsing column: {}", column.to_string());
+
+    let width = column_widths[column.to_usize()];
+
+    let bounds = get_column_bounds(column.to_usize(), column_widths.to_vec());
+
+    debug!("Column bounds: ({}, {})", bounds.0, bounds.1);
 
     let column_value = raw_entry
         .split_at(bounds.0).1
-        .split_at(bounds.1).0;
+        .split_at(width).0;
 
-    info!("{}", column_value);
+    debug!("{}\n", column_value);
 
     return column_value.trim().to_string();
 }
 
-fn parse_allowed_users(column_index: usize, raw_entry: String, column_widths: Vec<usize>) -> Vec<String>{
-    let column_value = parse_column(column_index, raw_entry, column_widths);
+fn parse_allowed_users(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> Vec<String> {
+    let column_value = parse_column(column, raw_entry, column_widths);
+
+    return column_value
+        .replace("[", "")
+        .replace("]", "")
+        .split(" ")
+        .map(|user| user.to_string())
+        .collect();
+}
+
+fn parse_roles(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> Vec<String> {
+    let column_value = parse_column(column, raw_entry, column_widths);
     return vec![column_value];
 }
 
-fn parse_roles(column_index: usize, raw_entry: String, column_widths: Vec<usize>) -> Vec<String> {
-    let column_value = parse_column(column_index, raw_entry, column_widths);
-    return vec![column_value];
-}
+fn parse_labels(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> HashMap<String, String> {
+    let column_value = parse_column(column, raw_entry, column_widths);
 
-fn parse_labels(column_index: usize, raw_entry: String, column_widths: Vec<usize>) -> HashMap<String, String> {
-    let column_value = parse_column(column_index, raw_entry, column_widths);
     let mut map: HashMap<String, String> = HashMap::new();
-    map.insert("key".to_string(), column_value.to_string());
+
+    column_value
+        .split(",")
+        .map(|label| label_to_key_value(label))
+        .for_each(|parsed_label| {
+            map.insert(parsed_label.0, parsed_label.1);
+        });
+
     return map;
+}
+
+fn label_to_key_value(label: &str) -> (String, String) {
+    let label_members: Vec<&str> = label.split("=").collect();
+    let key = label_members[0].to_string();
+    let value = label_members[1].to_string();
+    (key, value)
 }
