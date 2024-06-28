@@ -1,12 +1,13 @@
 #![allow(unreachable_code)]
 use std::io::Result;
-
 use log::info;
-use tsh::Tsh;
 
 mod tui;
 mod app;
-mod tsh;
+mod core;
+mod widgets;
+
+use core::tsh::Tsh;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -14,11 +15,9 @@ fn main() -> Result<()> {
     info!("Starting program");
 
     // Testing DS
-    let mut teleport = Tsh::new();
-    teleport.login("snyk.teleport.sh:443", "snyk.teleport.sh");
-    teleport.read_databases("native-pr-experience-polaris-prod-mt-us-1");
-
-    return Ok(());
+    // let mut teleport = Tsh::new();
+    // teleport.login("snyk.teleport.sh:443", "snyk.teleport.sh");
+    // teleport.read_databases("native-pr-experience-polaris-prod-mt-us-1");
 
     let mut terminal = tui::init()?;
     app::App::default().run(&mut terminal)?;

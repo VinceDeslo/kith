@@ -1,8 +1,14 @@
 use std::io;
-use crossterm::{event::{self, Event, KeyCode, KeyEvent, KeyEventKind}};
-use ratatui::{buffer::Buffer, layout::{Alignment, Rect}, style::Stylize, symbols::border, text::Line, widgets::{block::{Position, Title}, Block, Borders, Paragraph, Widget}, Frame};
-
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, Layout, Rect},
+    style::Stylize,
+    widgets::{Paragraph, Widget}, 
+    Frame
+};
 use super::tui;
+use super::widgets::database_list::StatefulDatabaseList;
 
 #[derive(Debug, Default)]
 pub struct App {
@@ -46,26 +52,31 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-            let title = Title::from(" Kith ");
-            let commands = Title::from(Line::from(vec![
-                " Quit ".into(),
-                "<Q> ".bold(),
-            ]));
-            let block = Block::default()
-                .title(title.alignment(Alignment::Center))
-                .title(
-                    commands
-                        .alignment(Alignment::Center)
-                        .position(Position::Bottom),
-                )
-                .borders(Borders::ALL)
-                .border_set(border::ROUNDED);
+        let vertical = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ]);
+        let [header_area, main_area, footer_area] = vertical.areas(area);
 
-            Paragraph::new("Welcome to your DB connections!")
-                .centered()
-                .block(block)
-                .white()
-                .on_black()
-                .render(area, buf);
+        render_header(header_area, buf);
+
+        let db_list = StatefulDatabaseList::default();
+        db_list.render(main_area, buf);
+
+        render_footer(footer_area, buf)
     }
+}
+
+fn render_header(area: Rect, buf: &mut Buffer) {
+    Paragraph::new("Kith")
+        .bold()
+        .centered()
+        .render(area, buf);
+}
+
+fn render_footer(area: Rect, buf: &mut Buffer) {
+    Paragraph::new("\nUse ↓↑ to move, <Q> to quit")
+        .centered()
+        .render(area, buf);
 }

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 #![allow(unused)]
 use std::{collections::HashMap, io::{BufRead, BufReader}, process::{Command, Stdio}};
 use log::{error, info, debug};
@@ -18,7 +17,7 @@ impl Lines {
     }
 }
 
-// Column definitions can be found in the Telepor repo
+// Column definitions can be found in the Teleport repo
 // https://github.com/gravitational/teleport/blob/abc6511f4016a4695062d53076b96ed1d05fec72/tool/tsh/common/db_print.go#L33
 enum Columns {
     Name,
@@ -71,7 +70,7 @@ pub struct Tsh {
 }
 
 #[derive(Debug, Default)]
-struct DatabaseEntry {
+pub struct DatabaseEntry {
     name: String, 
     description: String,
     protocol: String,
@@ -112,8 +111,8 @@ impl Tsh {
                     error!("failed to parse stdout from teleport login")
                 }
             }
-            Err(teleport_cmd) => {
-                error!("failed to get ouput from teleport login");
+            Err(err) => {
+                error!("failed to get ouput from teleport login: {}", err);
             }
         }
     }
@@ -274,11 +273,6 @@ fn parse_allowed_users(column: Columns, raw_entry: &String, column_widths: &Vec<
         .split(" ")
         .map(|user| user.to_string())
         .collect();
-}
-
-fn parse_roles(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> Vec<String> {
-    let column_value = parse_column(column, raw_entry, column_widths);
-    return vec![column_value];
 }
 
 fn parse_labels(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> HashMap<String, String> {
