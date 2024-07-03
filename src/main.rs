@@ -1,6 +1,7 @@
 #![allow(unreachable_code)]
 use std::io::Result;
 use log::debug;
+use dotenv::dotenv;
 
 mod tui;
 mod app;
@@ -9,6 +10,7 @@ mod core;
 mod widgets;
 
 fn main() -> Result<()> {
+    dotenv().ok();
     env_logger::init();
 
     let mut config = config::Config::new();
