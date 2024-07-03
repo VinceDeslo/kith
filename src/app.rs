@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, io};
+use std::io;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,

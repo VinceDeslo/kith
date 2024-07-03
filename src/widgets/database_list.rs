@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 
 use ratatui::{
     buffer::Buffer, layout::{Alignment, Constraint, Layout, Rect}, style::{palette::tailwind::SLATE, Modifier, Style, Stylize}, text::Line, widgets::{
-        block::{Position, Title}, Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, StatefulWidget, Widget
+        block::{Position, Title}, Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, StatefulWidget, Widget, Wrap
     }
 };
 use super::super::core::tsh::DatabaseEntry;
@@ -62,6 +62,7 @@ impl StatefulDatabaseList {
                 let details = entry.format_details();
 
                 Paragraph::new(details)
+                    .wrap(Wrap { trim: true })
                     .block(block)
                     .render(area, buf);
             },
