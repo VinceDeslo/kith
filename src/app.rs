@@ -8,23 +8,31 @@ use ratatui::{
     Frame
 };
 use super::tui;
+use super::config::Config;
 use super::widgets::database_list::StatefulDatabaseList;
 use super::core::tsh::Tsh;
 
 #[derive(Debug, Default)]
 pub struct App {
     teleport: Tsh,
+    config: Config,
     database_list: StatefulDatabaseList,
     logged_in: bool,
     exit: bool,
 }
 
 impl App {
-    pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()>{
-        // Initialize state
-        self.teleport = Tsh::new();
-        self.database_list = StatefulDatabaseList::default();
+    pub fn new(config: Config) -> App {
+        return App {
+            teleport: Tsh::new(),
+            config,
+            database_list: StatefulDatabaseList::default(),
+            logged_in: false,
+            exit: false,
+        }
+    }
 
+    pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()>{
         while !self.exit {
             // Render new state
             terminal.draw(|frame| self.render_frame(frame))?;
@@ -64,7 +72,7 @@ impl App {
     }
 
     fn handle_login(&mut self) {
-        self.teleport.login("snyk.teleport.sh:443", "snyk.teleport.sh");
+        self.teleport.login(&self.config.tsh_proxy, &self.config.tsh_cluster);
         self.logged_in = true;
     }
 
