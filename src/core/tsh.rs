@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{collections::HashMap, io::{BufRead, BufReader}, process::{Command, Stdio}};
+use std::{collections::HashMap, fmt::format, io::{BufRead, BufReader}, process::{Command, Stdio}};
 use log::{error, info, debug};
 
 enum Lines {
@@ -66,12 +66,12 @@ pub struct Tsh {
     lines: Vec<String>,
     column_widths: Vec<usize>,
     raw_entries: Vec<String>,
-    entries: Vec<DatabaseEntry>,
+    pub entries: Vec<DatabaseEntry>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DatabaseEntry {
-    name: String, 
+    pub name: String, 
     description: String,
     protocol: String,
     database_type: String,
@@ -93,7 +93,7 @@ impl Tsh {
     }
 
     pub fn login(&self, proxy_name: &str, cluster: &str) {
-        info!("logging into teleport");
+        debug!("logging into teleport");
 
         let proxy = format!("--proxy={}", proxy_name);
 
@@ -105,8 +105,8 @@ impl Tsh {
         match teleport_cmd {
             Ok(teleport_cmd) => {
                 if let Ok(stdout) = String::from_utf8(teleport_cmd.stdout) {
-                    info!("teleport login output");
-                    info!("{}", stdout)
+                    debug!("teleport login output");
+                    debug!("{}", stdout)
                 } else {
                     error!("failed to parse stdout from teleport login")
                 }
@@ -118,7 +118,7 @@ impl Tsh {
     }
 
     pub fn read_databases(&mut self, database_name: &str) {
-        info!("reading teleport databases");
+        debug!("reading teleport databases");
 
         let search = format!("--search={}", database_name);
     
@@ -137,7 +137,7 @@ impl Tsh {
             self.lines.push(line_val);
         }
         
-        info!("parsing teleport databases");
+        debug!("parsing teleport databases");
         self.parse_separators();
         self.parse_raw_entries();
         self.parse_entries();
@@ -146,7 +146,7 @@ impl Tsh {
     // column widths are parsed from the second line of Teleport 
     // command output. These can be used to know what columns may be empty
     fn parse_separators(&mut self) {
-        info!("parsing separators");
+        debug!("parsing separators");
 
         let column_separators = &self.lines[Lines::Separators.to_usize()];
 
@@ -160,7 +160,7 @@ impl Tsh {
     }
 
     fn parse_raw_entries(&mut self) {
-        info!("parsing raw entries");
+        debug!("parsing raw entries");
 
         let raw_entries = &self.lines[Lines::FirstEntry.to_usize()..];
 
@@ -174,7 +174,7 @@ impl Tsh {
     }
 
     fn parse_entries(&mut self) {
-        info!("parsing entries");
+        debug!("parsing entries");
 
         let column_widths = self.column_widths.clone();
 
@@ -247,7 +247,7 @@ fn get_column_bounds(column_index: usize, column_widths: Vec<usize>) -> (usize, 
 }
 
 fn parse_column(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> String {
-    info!("Parsing column: {}", column.to_string());
+    debug!("Parsing column: {}", column.to_string());
 
     let width = column_widths[column.to_usize()];
 
@@ -295,4 +295,93 @@ fn label_to_key_value(label: &str) -> (String, String) {
     let key = label_members[0].to_string();
     let value = label_members[1].to_string();
     (key, value)
+}
+
+impl DatabaseEntry {
+    pub fn format_details(&self) -> String {
+        let mut details = String::new();
+
+        let name = format!(
+            "{}: {}\n", 
+            Columns::Name.to_string(), 
+            self.name
+        );
+        details.push_str(name.as_str());
+
+        let description = format!(
+            "{}: {}\n", 
+            Columns::Description.to_string(), 
+            self.description
+        );
+        details.push_str(description.as_str());
+        
+        let protocol = format!(
+            "{}: {}\n",
+            Columns::Protocol.to_string(),
+            self.protocol
+        );
+        details.push_str(protocol.as_str());
+        
+        let database_type = format!(
+            "{}: {}\n", 
+            Columns::DatabaseType.to_string(),
+            self.database_type
+        );
+        details.push_str(database_type.as_str());
+        
+        let uri = format!(
+            "{}: {}\n", 
+            Columns::Uri.to_string(), 
+            self.uri
+        );
+        details.push_str(uri.as_str());
+
+        let allowed_users_list = self.allowed_users
+            .iter()
+            .fold(String::new(), |mut accumulator, element| {
+                accumulator.push_str(
+                    format!("  - {}\n", element).as_str()
+                );
+                return accumulator
+            });
+
+        let allowed_users = format!(
+            "{}:\n{}",
+            Columns::AllowedUsers.to_string(),
+            allowed_users_list
+        );
+        details.push_str(allowed_users.as_str());
+
+        let database_roles = format!(
+            "{}: {}\n", 
+            Columns::DatabaseRoles.to_string(), 
+            self.database_roles
+        );
+        details.push_str(database_roles.as_str());
+
+        let labels_list = self.labels
+            .iter()
+            .fold(String::new(), |mut accumulator, element| {
+                accumulator.push_str(
+                    format!("  - {}: {}\n", element.0, element.1).as_str()
+                );
+                return accumulator
+            });
+
+        let labels  = format!(
+            "{}:\n{}",
+            Columns::Labels.to_string(),
+            labels_list
+        );
+        details.push_str(labels.as_str());
+
+        let connect = format!(
+            "{}: {}\n",
+            Columns::Connect.to_string(),
+            self.connect
+        );
+        details.push_str(connect.as_str());
+
+        return details;
+    }
 }
