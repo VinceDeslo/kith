@@ -7,18 +7,29 @@ use ratatui::{
     widgets::{Paragraph, Widget}, 
     Frame
 };
+use crate::widgets::search_dialog::SearchDialog;
+
 use super::tui;
 use super::config::Config;
 use super::widgets::database_list::StatefulDatabaseList;
 use super::core::tsh::Tsh;
 
-#[derive(Debug, Default)]
+enum InputMode {
+    Normal,
+    Searching,
+    Connecting,
+}
+
 pub struct App {
     teleport: Tsh,
     config: Config,
     database_list: StatefulDatabaseList,
+    search_dialog: SearchDialog,
+    input_mode: InputMode,
     logged_in: bool,
     exit: bool,
+    show_search: bool,
+    show_connect: bool,
 }
 
 impl App {
@@ -27,8 +38,12 @@ impl App {
             teleport: Tsh::new(),
             config,
             database_list: StatefulDatabaseList::default(),
+            search_dialog: SearchDialog::new(),
+            input_mode: InputMode::Normal,
             logged_in: false,
             exit: false,
+            show_search: false,
+            show_connect: false,
         }
     }
 
@@ -47,7 +62,10 @@ impl App {
     }
 
     fn render_frame(&self, frame: &mut Frame){
-        frame.render_widget(self, frame.size());
+        let frame_size = frame.size();
+        frame.render_widget(self, frame_size);
+
+        self.enable_search_cursor(frame, frame_size);
     }
 
     fn handle_events(&mut self) -> io::Result<()>{
@@ -61,13 +79,30 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Char('l') => self.handle_login(),
-            KeyCode::Char('s') => self.handle_search(),
-            KeyCode::Down => self.handle_next(),
-            KeyCode::Up => self.handle_previous(),
-            _ => {}
+        match self.input_mode {
+            InputMode::Normal => match key_event.code {
+                KeyCode::Char('q') => self.exit(),
+                KeyCode::Char('l') => self.handle_login(),
+                KeyCode::Char('s') => self.toggle_search(),
+                KeyCode::Char('c') => self.toggle_connect(),
+                KeyCode::Down => self.handle_list_next(),
+                KeyCode::Up => self.handle_list_previous(),
+                _ => {},
+            },
+            InputMode::Searching => match key_event.code {
+                KeyCode::Enter => self.handle_search(),
+                KeyCode::Char(to_enter) => self.search_dialog.enter_char(to_enter),
+                KeyCode::Backspace => self.search_dialog.delete_char(),
+                KeyCode::Left => self.search_dialog.move_cursor_left(),
+                KeyCode::Right => self.search_dialog.move_cursor_right(),
+                KeyCode::Esc => self.exit_search(),
+                _ => {},
+            },
+            InputMode::Connecting => match key_event.code {
+                KeyCode::Enter => self.handle_connect(),
+                KeyCode::Esc => self.exit_connect(),
+                _ => {},
+            },
         } 
     }
 
@@ -76,16 +111,52 @@ impl App {
         self.logged_in = true;
     }
 
-    fn handle_search(&mut self) {
-        self.handle_login();
-        self.teleport.read_databases("native-pr-experience");
+    fn toggle_search(&mut self) {
+        self.input_mode = InputMode::Searching;
+        self.show_search = !self.show_search;
     }
 
-    fn handle_next(&mut self) {
+    fn handle_search(&mut self) {
+        self.handle_login();
+        self.teleport.read_databases(&self.search_dialog.search);
+        self.exit_search();
+    }
+
+    fn enable_search_cursor(&self, frame: &mut Frame, area: Rect) {
+        let (_, main_area, _) = get_high_level_areas(area);
+
+        match self.input_mode {
+            InputMode::Searching => {
+                self.search_dialog.set_cursor(frame, main_area);
+            },
+            _ => {},
+        }
+    }
+
+    fn exit_search(&mut self) {
+        self.search_dialog.reset();
+        self.input_mode = InputMode::Normal;
+        self.show_search = false;
+    }
+
+    fn toggle_connect(&mut self) {
+        self.input_mode = InputMode::Connecting;
+        self.show_connect = !self.show_connect;
+    }
+
+    fn handle_connect(&self) {
+        !todo!();
+    }
+
+    fn exit_connect(&self) {
+        todo!();
+    }
+
+    fn handle_list_next(&mut self) {
         self.database_list.state.select_next()
     }
     
-    fn handle_previous(&mut self) {
+    fn handle_list_previous(&mut self) {
         self.database_list.state.select_previous()
     }
 
@@ -96,23 +167,31 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let vertical = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(2),
-        ]);
-        let [header_area, main_area, footer_area] = vertical.areas(area);
+        let (header_area, main_area, footer_area) = get_high_level_areas(area);
 
         render_header(header_area, buf);
-
-        // let mut db_list = StatefulDatabaseList::default();
 
         if self.teleport.entries.len() != 0 {
             self.database_list.render(main_area, buf);
         }
+        if self.show_search {
+            self.search_dialog.render(main_area, buf);
+        }
+        if self.show_connect {}
 
         render_footer(footer_area, buf)
     }
+}
+
+fn get_high_level_areas(area: Rect) -> (Rect, Rect, Rect) {
+    let vertical = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Min(0),
+        Constraint::Length(2),
+    ]);
+    let [header_area, main_area, footer_area] = vertical.areas(area);
+
+    return (header_area, main_area, footer_area);
 }
 
 fn render_header(area: Rect, buf: &mut Buffer) {
@@ -123,7 +202,7 @@ fn render_header(area: Rect, buf: &mut Buffer) {
 }
 
 fn render_footer(area: Rect, buf: &mut Buffer) {
-    Paragraph::new("\n<L> to login, <S> to search, ↓↑ to move, <Q> to quit")
+    Paragraph::new("\n<L> to login, <S> to search, ↓↑ to move, <C> to connect, <Q> to quit")
         .centered()
         .render(area, buf);
 }
