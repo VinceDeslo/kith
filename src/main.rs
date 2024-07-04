@@ -19,7 +19,12 @@ fn main() -> Result<()> {
     debug!("Starting program");
 
     let mut terminal = tui::init()?;
-    app::App::new(config).run(&mut terminal)?;
+
+    let mut application = app::App::new(config);
+
+    application.run(&mut terminal)?;
+
     tui::restore()?;
+
     Ok(())
 }

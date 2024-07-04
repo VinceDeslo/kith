@@ -1,4 +1,9 @@
-use ratatui::{buffer::Buffer, layout::{Constraint, Layout, Rect}, widgets::{Block, Borders, Clear, Padding, Paragraph, Widget}, Frame};
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, Layout, Rect},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget},
+    Frame
+};
 
 pub struct SearchDialog {
     pub search: String,
@@ -15,7 +20,7 @@ impl SearchDialog {
 
     fn render_search(&self, area: Rect, buf: &mut Buffer) {
         let block = Block::new()
-            .title("Search")
+            .title(" Search ")
             .borders(Borders::ALL)
             .padding(Padding::new(1, 1, 1, 1));
 

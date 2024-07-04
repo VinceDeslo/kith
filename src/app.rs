@@ -7,11 +7,14 @@ use ratatui::{
     widgets::{Paragraph, Widget}, 
     Frame
 };
-use crate::widgets::search_dialog::SearchDialog;
+use crate::widgets::{
+    database_list::StatefulDatabaseList,
+    search_dialog::SearchDialog,
+    connect_dialog::ConnectDialog,
+};
 
 use super::tui;
 use super::config::Config;
-use super::widgets::database_list::StatefulDatabaseList;
 use super::core::tsh::Tsh;
 
 enum InputMode {
@@ -25,6 +28,7 @@ pub struct App {
     config: Config,
     database_list: StatefulDatabaseList,
     search_dialog: SearchDialog,
+    connect_dialog: ConnectDialog,
     input_mode: InputMode,
     logged_in: bool,
     exit: bool,
@@ -37,8 +41,9 @@ impl App {
         return App {
             teleport: Tsh::new(),
             config,
-            database_list: StatefulDatabaseList::default(),
+            database_list: StatefulDatabaseList::new(),
             search_dialog: SearchDialog::new(),
+            connect_dialog: ConnectDialog::new(),
             input_mode: InputMode::Normal,
             logged_in: false,
             exit: false,
@@ -65,7 +70,7 @@ impl App {
         let frame_size = frame.size();
         frame.render_widget(self, frame_size);
 
-        self.enable_search_cursor(frame, frame_size);
+        self.enable_cursor(frame, frame_size);
     }
 
     fn handle_events(&mut self) -> io::Result<()>{
@@ -79,6 +84,10 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('q') => self.exit(),
+            _ => {},
+        }
         match self.input_mode {
             InputMode::Normal => match key_event.code {
                 KeyCode::Char('q') => self.exit(),
@@ -90,17 +99,17 @@ impl App {
                 _ => {},
             },
             InputMode::Searching => match key_event.code {
+                KeyCode::Esc => self.exit_search(),
                 KeyCode::Enter => self.handle_search(),
                 KeyCode::Char(to_enter) => self.search_dialog.enter_char(to_enter),
                 KeyCode::Backspace => self.search_dialog.delete_char(),
                 KeyCode::Left => self.search_dialog.move_cursor_left(),
                 KeyCode::Right => self.search_dialog.move_cursor_right(),
-                KeyCode::Esc => self.exit_search(),
                 _ => {},
             },
             InputMode::Connecting => match key_event.code {
-                KeyCode::Enter => self.handle_connect(),
                 KeyCode::Esc => self.exit_connect(),
+                KeyCode::Enter => self.handle_connect(),
                 _ => {},
             },
         } 
@@ -122,7 +131,7 @@ impl App {
         self.exit_search();
     }
 
-    fn enable_search_cursor(&self, frame: &mut Frame, area: Rect) {
+    fn enable_cursor(&self, frame: &mut Frame, area: Rect) {
         let (_, main_area, _) = get_high_level_areas(area);
 
         match self.input_mode {
@@ -144,12 +153,17 @@ impl App {
         self.show_connect = !self.show_connect;
     }
 
-    fn handle_connect(&self) {
-        !todo!();
+    fn handle_connect(&mut self) {
+        self.connect_dialog.next_step();
+        if self.connect_dialog.ready_to_connect {
+           // Break out of the TUI starts here
+        }
     }
 
-    fn exit_connect(&self) {
-        todo!();
+    fn exit_connect(&mut self) {
+        self.connect_dialog.reset();
+        self.input_mode = InputMode::Normal;
+        self.show_connect = false;
     }
 
     fn handle_list_next(&mut self) {
@@ -177,7 +191,9 @@ impl Widget for &App {
         if self.show_search {
             self.search_dialog.render(main_area, buf);
         }
-        if self.show_connect {}
+        if self.show_connect {
+            self.connect_dialog.render(main_area, buf);
+        }
 
         render_footer(footer_area, buf)
     }
@@ -202,7 +218,7 @@ fn render_header(area: Rect, buf: &mut Buffer) {
 }
 
 fn render_footer(area: Rect, buf: &mut Buffer) {
-    Paragraph::new("\n<L> to login, <S> to search, ↓↑ to move, <C> to connect, <Q> to quit")
+    Paragraph::new("\n<s> Search, ↓↑ Move, <c> Connect, <esc> Escape Dialog, <q> Quit")
         .centered()
         .render(area, buf);
 }

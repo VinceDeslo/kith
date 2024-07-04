@@ -17,6 +17,13 @@ pub struct StatefulDatabaseList {
 }
 
 impl StatefulDatabaseList {
+    pub fn new() -> StatefulDatabaseList {
+        return StatefulDatabaseList {
+            state: ListState::default(),
+            items: vec![],
+        }
+    }
+
     pub fn with_items(&mut self, items: Vec<DatabaseEntry>) {
         self.items = items;
     }

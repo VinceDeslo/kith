@@ -69,19 +69,6 @@ pub struct Tsh {
     pub entries: Vec<DatabaseEntry>,
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct DatabaseEntry {
-    pub name: String, 
-    description: String,
-    protocol: String,
-    database_type: String,
-    uri: String,                                                                           
-    allowed_users: Vec<String>,
-    database_roles: String,
-    labels: HashMap<String, String>,
-    connect: String,
-}
-
 impl Tsh {
     pub fn new() -> Tsh {
         return Tsh {
@@ -297,7 +284,37 @@ fn label_to_key_value(label: &str) -> (String, String) {
     (key, value)
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct DatabaseEntry {
+    pub name: String,
+    description: String,
+    protocol: String,
+    database_type: String,
+    uri: String,
+    allowed_users: Vec<String>,
+    database_roles: String,
+    labels: HashMap<String, String>,
+    connect: String,
+}
+
 impl DatabaseEntry {
+    pub fn connect(&self, db_name: String, db_user: String) {
+        let db_user_arg = format!("--db-user={}", db_user);
+        let db_name_arg = format!("--db-name={}", db_name);
+
+        Command::new("tsh")
+            .args([
+                "db",
+                "connect",
+                db_user_arg.as_str(),
+                db_name_arg.as_str(),
+                self.name.as_str(),
+            ])
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to connect to database");
+    }
+
     pub fn format_details(&self) -> String {
         let mut details = String::new();
 
