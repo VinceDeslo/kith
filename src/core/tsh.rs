@@ -287,11 +287,11 @@ fn label_to_key_value(label: &str) -> (String, String) {
 #[derive(Debug, Default, Clone)]
 pub struct DatabaseEntry {
     pub name: String,
+    pub allowed_users: Vec<String>,
     description: String,
     protocol: String,
     database_type: String,
     uri: String,
-    allowed_users: Vec<String>,
     database_roles: String,
     labels: HashMap<String, String>,
     connect: String,

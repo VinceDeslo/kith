@@ -7,8 +7,7 @@ use ratatui::{
     }
 };
 use super::super::core::tsh::DatabaseEntry;
-
-const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
+use crate::widgets::styles;
 
 #[derive(Debug, Default)]
 pub struct StatefulDatabaseList {
@@ -48,7 +47,7 @@ impl StatefulDatabaseList {
 
         let list = List::new(items)
             .block(block)
-            .highlight_style(SELECTED_STYLE)
+            .highlight_style(styles::SELECTED_STYLE)
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 

@@ -61,7 +61,9 @@ impl App {
             self.handle_events()?;
 
             // Update state
-            self.database_list.with_items(self.teleport.entries.to_vec())
+            self.set_database_list_state();
+            self.set_user_list_state();
+            self.set_selected_database_state();
         }
         Ok(())
     }
@@ -84,18 +86,14 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            _ => {},
-        }
         match self.input_mode {
             InputMode::Normal => match key_event.code {
                 KeyCode::Char('q') => self.exit(),
                 KeyCode::Char('l') => self.handle_login(),
                 KeyCode::Char('s') => self.toggle_search(),
                 KeyCode::Char('c') => self.toggle_connect(),
-                KeyCode::Down => self.handle_list_next(),
-                KeyCode::Up => self.handle_list_previous(),
+                KeyCode::Down => self.handle_database_list_next(),
+                KeyCode::Up => self.handle_database_list_previous(),
                 _ => {},
             },
             InputMode::Searching => match key_event.code {
@@ -110,6 +108,8 @@ impl App {
             InputMode::Connecting => match key_event.code {
                 KeyCode::Esc => self.exit_connect(),
                 KeyCode::Enter => self.handle_connect(),
+                KeyCode::Down => self.handle_user_list_next(),
+                KeyCode::Up => self.handle_user_list_previous(),
                 _ => {},
             },
         } 
@@ -166,12 +166,43 @@ impl App {
         self.show_connect = false;
     }
 
-    fn handle_list_next(&mut self) {
-        self.database_list.state.select_next()
+    fn set_database_list_state(&mut self) {
+        self.database_list.with_items(self.teleport.entries.to_vec());
+    }
+
+    fn handle_database_list_next(&mut self) {
+        self.database_list.state.select_next();
+    }
+
+    fn handle_database_list_previous(&mut self) {
+        self.database_list.state.select_previous();
+    }
+
+    fn set_user_list_state(&mut self) {
+        match &self.connect_dialog.selected_entry {
+            Some(entry) => {
+                self.connect_dialog.user_list.with_items(entry.allowed_users.clone());
+            },
+            None => {},
+        }
+    }
+
+    fn handle_user_list_next(&mut self) {
+        self.connect_dialog.user_list.state.select_next();
     }
     
-    fn handle_list_previous(&mut self) {
-        self.database_list.state.select_previous()
+    fn handle_user_list_previous(&mut self) {
+        self.connect_dialog.user_list.state.select_previous();
+    }
+
+    fn set_selected_database_state(&mut self) {
+        match &self.database_list.state.selected() {
+            Some(index) => {
+                let database = &self.database_list.items[*index];
+                self.connect_dialog.selected_entry = Some(database.clone());
+            },
+            None => {},
+        }
     }
 
     fn exit(&mut self) {
