@@ -18,6 +18,11 @@ impl StatefulUserList {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.state = ListState::default();
+        self.items = vec![];
+    }
+
     pub fn with_items(&mut self, items: Vec<String>) {
         self.items = items;
     }

@@ -2,11 +2,12 @@
 use ratatui::{buffer::Buffer, layout::Rect, widgets::{Block, Borders, Clear, Padding, Widget}};
 
 use crate::{
-    core::tsh::DatabaseEntry,
+    core::tsh::{self, ConnectionArgs, DatabaseEntry},
     widgets::{
+        confirmation_toggle::{ConfirmationOption, ConfirmationToggle},
+        database_name_input::{self, DatabaseNameInput},
         dialog::get_dialog_layout,
         user_list::StatefulUserList,
-        database_name_input::{self, DatabaseNameInput},
     }
 };
 
@@ -16,31 +17,17 @@ pub enum Step {
     Confirmation,
 }
 
-enum ConfirmationOptions {
-    Yes,
-    No,
-}
-
-impl ConfirmationOptions {
-    fn to_string(&self) -> &str {
-        match self {
-            ConfirmationOptions::Yes => "Yes",
-            ConfirmationOptions::No => "No",
-        }
-    }
-}
-
 pub struct ConnectDialog {
     pub user_list: StatefulUserList,
     pub database_name_input: DatabaseNameInput,
-    pub ready_to_connect: bool,
+    pub confirmation_toggle: ConfirmationToggle,
+    pub ready_to_connect: Option<bool>,
     pub selected_entry: Option<DatabaseEntry>,
     pub db_name: String,
     pub db_user: String,
     pub current_step: Step,
 
     cursor_index: usize,
-    confirmation: ConfirmationOptions,
 }
 
 impl Widget for &ConnectDialog {
@@ -58,13 +45,13 @@ impl ConnectDialog {
         return ConnectDialog {
             user_list: StatefulUserList::new(),
             database_name_input: DatabaseNameInput::new(),
-            ready_to_connect: false,
+            confirmation_toggle: ConfirmationToggle::new(),
+            ready_to_connect: None,
             selected_entry: None,
             db_name: String::new(),
             db_user: String::new(),
             current_step: Step::UserSelection,
             cursor_index: 0,
-            confirmation: ConfirmationOptions::No,
         }
     }
 
@@ -81,10 +68,24 @@ impl ConnectDialog {
     }
 
     pub fn reset(&mut self) {
+        self.user_list.reset();
+        self.database_name_input.reset();
+        self.confirmation_toggle.reset();
+
         self.current_step = Step::UserSelection;
+        self.ready_to_connect = None;
+        self.selected_entry = None;
         self.db_name.clear();
         self.db_user.clear();
         self.cursor_index = 0;
+    }
+
+    pub fn to_connection_args(&self) -> ConnectionArgs {
+        return ConnectionArgs {
+            instance: self.selected_entry.as_ref().unwrap().name.clone(),
+            db_name: self.db_name.clone(),
+            db_user: self.db_user.clone()
+        }
     }
 
     fn navigate_to_db_input(&mut self) {
@@ -108,9 +109,9 @@ impl ConnectDialog {
     }
 
     fn connect(&mut self) {
-        match self.confirmation {
-            ConfirmationOptions::Yes => self.ready_to_connect = true, 
-            ConfirmationOptions::No => self.ready_to_connect = false,
+        match self.confirmation_toggle.get_selected() {
+            ConfirmationOption::Yes => self.ready_to_connect = Some(true),
+            ConfirmationOption::No => self.ready_to_connect = Some(false),
         }
     }
 
@@ -143,7 +144,7 @@ impl ConnectDialog {
     }
 
     fn render_confirmation(&self, area: Rect, buf: &mut Buffer) {
-        let confirmation_dialog_area = get_dialog_layout(30, 10, area);
+        let confirmation_dialog_area = get_dialog_layout(30, 15, area);
 
         let block = Block::new()
             .title(" Connect? ")
@@ -152,5 +153,7 @@ impl ConnectDialog {
 
         Widget::render(Clear, confirmation_dialog_area, buf);
         Widget::render(block, confirmation_dialog_area, buf);
+
+        self.confirmation_toggle.render(confirmation_dialog_area, buf);
     }
 }

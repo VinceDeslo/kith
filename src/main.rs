@@ -26,5 +26,9 @@ fn main() -> Result<()> {
 
     tui::restore()?;
 
+    if application.initiate_connection {
+        application.connect_to_database();
+    }
+
     Ok(())
 }

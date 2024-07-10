@@ -61,6 +61,12 @@ impl Columns {
     }
 }
 
+pub struct ConnectionArgs {
+    pub instance: String,
+    pub db_user: String,
+    pub db_name: String,
+}
+
 #[derive(Debug, Default)]
 pub struct Tsh {
     lines: Vec<String>,
@@ -104,8 +110,56 @@ impl Tsh {
         }
     }
 
+    // Database connection currently spawns a new terminal via AppleScript.
+    // This is done to avoid the complexity of spawning an interactive child of psql
+    // in the current terminal session. Also ensures that we don't have any zombie processes.
+    // This should eventually be refactored into an OS agnostic approach.
+    pub fn connect(&self, args: ConnectionArgs) {
+        info!("Connecting...");
+
+        let connection_command = format!(
+            "tsh db connect --db-user={} --db-name={} {}",
+            args.db_user,
+            args.db_name,
+            &args.instance,
+        );
+
+        let script = format!(
+            r#"
+            tell application "Terminal"
+                activate
+                do script "{}"
+            end tell
+            "#,
+            connection_command,
+        );
+
+        info!("{}", script);
+
+        let status = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .status()
+            .expect("failed to execute AppleScript");
+
+        if !status.success() {
+            error!("teleport database connection failed with status: {}", status);
+        }
+    }
+
+    fn disconnect(&self) {
+        Command::new("tsh")
+            .args(["db", "logout"])
+            .stdout(Stdio::piped())
+            .output()
+            .expect("failed to disconnect from the teleport database");
+    }
+
     pub fn read_databases(&mut self, database_name: &str) {
         debug!("reading teleport databases");
+
+        // Ensure we are disconnected from any instances
+        self.disconnect();
 
         let search = format!("--search={}", database_name);
     

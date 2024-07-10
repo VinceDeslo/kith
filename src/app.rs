@@ -7,13 +7,15 @@ use ratatui::{
     widgets::{Paragraph, Widget}, 
     Frame
 };
-use crate::widgets::{
-    connect_dialog::{ConnectDialog, Step}, database_list::StatefulDatabaseList, search_dialog::SearchDialog
-};
 
-use super::tui;
-use super::config::Config;
-use super::core::tsh::Tsh;
+use crate::tui;
+use crate::config::Config;
+use crate::core::tsh::Tsh;
+use crate::widgets::{
+    connect_dialog::{ConnectDialog, Step},
+    database_list::StatefulDatabaseList,
+    search_dialog::SearchDialog
+};
 
 enum InputMode {
     Normal,
@@ -22,6 +24,7 @@ enum InputMode {
 }
 
 pub struct App {
+    pub initiate_connection: bool,
     teleport: Tsh,
     config: Config,
     database_list: StatefulDatabaseList,
@@ -47,6 +50,7 @@ impl App {
             exit: false,
             show_search: false,
             show_connect: false,
+            initiate_connection: false,
         }
     }
 
@@ -65,6 +69,11 @@ impl App {
             self.connect_dialog.set_database_name_state();
         }
         Ok(())
+    }
+
+    pub fn connect_to_database(&self) {
+        let args = self.connect_dialog.to_connection_args();
+        self.teleport.connect(args);
     }
 
     fn render_frame(&self, frame: &mut Frame){
@@ -107,8 +116,8 @@ impl App {
             InputMode::Connecting => match key_event.code {
                 KeyCode::Esc => self.exit_connect(),
                 KeyCode::Enter => self.handle_connect(),
-                KeyCode::Down => self.handle_user_list_next(),
-                KeyCode::Up => self.handle_user_list_previous(),
+                KeyCode::Down => self.handle_connect_down(),
+                KeyCode::Up => self.handle_connect_up(),
                 KeyCode::Char(to_enter) => self.handle_connect_char_input(to_enter),
                 KeyCode::Backspace => self.handle_connect_backspace(),
                 KeyCode::Left => self.handle_connect_left(),
@@ -166,8 +175,14 @@ impl App {
 
     fn handle_connect(&mut self) {
         self.connect_dialog.next_step();
-        if self.connect_dialog.ready_to_connect {
-           // Break out of the TUI starts here
+        match self.connect_dialog.ready_to_connect {
+            Some(flag) => {
+                match flag {
+                    true => self.breakout_and_connect(),
+                    false => self.exit_connect(),
+                }
+            },
+            None => {},
         }
     }
 
@@ -184,6 +199,30 @@ impl App {
         match self.connect_dialog.current_step {
             Step::DatabaseInput => {
                 self.connect_dialog.database_name_input.delete_char();
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_connect_down(&mut self) {
+        match self.connect_dialog.current_step {
+            Step::UserSelection => {
+                self.connect_dialog.user_list.state.select_next();
+            },
+            Step::Confirmation => {
+                self.connect_dialog.confirmation_toggle.toggle();
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_connect_up(&mut self) {
+        match self.connect_dialog.current_step {
+            Step::UserSelection => {
+                self.connect_dialog.user_list.state.select_previous();
+            },
+            Step::Confirmation => {
+                self.connect_dialog.confirmation_toggle.toggle();
             },
             _ => {},
         }
@@ -234,14 +273,6 @@ impl App {
         }
     }
 
-    fn handle_user_list_next(&mut self) {
-        self.connect_dialog.user_list.state.select_next();
-    }
-    
-    fn handle_user_list_previous(&mut self) {
-        self.connect_dialog.user_list.state.select_previous();
-    }
-
     fn set_selected_database_state(&mut self) {
         match &self.database_list.state.selected() {
             Some(index) => {
@@ -250,6 +281,11 @@ impl App {
             },
             None => {},
         }
+    }
+
+    fn breakout_and_connect(&mut self) {
+        self.initiate_connection = true;
+        self.exit();
     }
 
     fn exit(&mut self) {
