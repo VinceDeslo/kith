@@ -1,11 +1,16 @@
 #![allow(unused)]
 use ratatui::{buffer::Buffer, layout::Rect, widgets::{Block, Borders, Clear, Padding, Widget}};
 
-use crate::{core::tsh::DatabaseEntry, widgets::dialog::get_dialog_layout};
+use crate::{
+    core::tsh::DatabaseEntry,
+    widgets::{
+        dialog::get_dialog_layout,
+        user_list::StatefulUserList,
+        database_name_input::{self, DatabaseNameInput},
+    }
+};
 
-use crate::widgets::user_list::StatefulUserList;
-
-enum Step {
+pub enum Step {
     UserSelection,
     DatabaseInput,
     Confirmation,
@@ -27,12 +32,13 @@ impl ConfirmationOptions {
 
 pub struct ConnectDialog {
     pub user_list: StatefulUserList,
+    pub database_name_input: DatabaseNameInput,
     pub ready_to_connect: bool,
     pub selected_entry: Option<DatabaseEntry>,
     pub db_name: String,
     pub db_user: String,
+    pub current_step: Step,
 
-    current_step: Step,
     cursor_index: usize,
     confirmation: ConfirmationOptions,
 }
@@ -50,14 +56,15 @@ impl Widget for &ConnectDialog {
 impl ConnectDialog {
     pub fn new() -> ConnectDialog {
         return ConnectDialog {
+            user_list: StatefulUserList::new(),
+            database_name_input: DatabaseNameInput::new(),
             ready_to_connect: false,
-            current_step: Step::UserSelection,
             selected_entry: None,
             db_name: String::new(),
             db_user: String::new(),
+            current_step: Step::UserSelection,
             cursor_index: 0,
             confirmation: ConfirmationOptions::No,
-            user_list: StatefulUserList::new(),
         }
     }
 
@@ -67,6 +74,17 @@ impl ConnectDialog {
             Step::DatabaseInput => self.navigate_to_confirmation(), 
             Step::Confirmation => self.connect(),
         }
+    }
+
+    pub fn set_database_name_state(&mut self) {
+        self.db_name = self.database_name_input.database_name.clone();
+    }
+
+    pub fn reset(&mut self) {
+        self.current_step = Step::UserSelection;
+        self.db_name.clear();
+        self.db_user.clear();
+        self.cursor_index = 0;
     }
 
     fn navigate_to_db_input(&mut self) {
@@ -120,6 +138,8 @@ impl ConnectDialog {
 
         Widget::render(Clear, database_input_dialog_area, buf);
         Widget::render(block, database_input_dialog_area, buf);
+
+        self.database_name_input.render(database_input_dialog_area, buf);
     }
 
     fn render_confirmation(&self, area: Rect, buf: &mut Buffer) {
@@ -132,12 +152,5 @@ impl ConnectDialog {
 
         Widget::render(Clear, confirmation_dialog_area, buf);
         Widget::render(block, confirmation_dialog_area, buf);
-    }
-
-    pub fn reset(&mut self) {
-        self.current_step = Step::UserSelection;
-        self.db_name.clear();
-        self.db_user.clear();
-        self.cursor_index = 0;
     }
 }

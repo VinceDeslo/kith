@@ -8,9 +8,7 @@ use ratatui::{
     Frame
 };
 use crate::widgets::{
-    database_list::StatefulDatabaseList,
-    search_dialog::SearchDialog,
-    connect_dialog::ConnectDialog,
+    connect_dialog::{ConnectDialog, Step}, database_list::StatefulDatabaseList, search_dialog::SearchDialog
 };
 
 use super::tui;
@@ -62,8 +60,9 @@ impl App {
 
             // Update state
             self.set_database_list_state();
-            self.set_user_list_state();
             self.set_selected_database_state();
+            self.set_user_list_state();
+            self.connect_dialog.set_database_name_state();
         }
         Ok(())
     }
@@ -110,6 +109,10 @@ impl App {
                 KeyCode::Enter => self.handle_connect(),
                 KeyCode::Down => self.handle_user_list_next(),
                 KeyCode::Up => self.handle_user_list_previous(),
+                KeyCode::Char(to_enter) => self.handle_connect_char_input(to_enter),
+                KeyCode::Backspace => self.handle_connect_backspace(),
+                KeyCode::Left => self.handle_connect_left(),
+                KeyCode::Right => self.handle_connect_right(),
                 _ => {},
             },
         } 
@@ -138,6 +141,14 @@ impl App {
             InputMode::Searching => {
                 self.search_dialog.set_cursor(frame, main_area);
             },
+            InputMode::Connecting => {
+                match self.connect_dialog.current_step {
+                    Step::DatabaseInput => {
+                        self.connect_dialog.database_name_input.set_cursor(frame, main_area);
+                    },
+                    _ => {},
+                }
+            },
             _ => {},
         }
     }
@@ -157,6 +168,42 @@ impl App {
         self.connect_dialog.next_step();
         if self.connect_dialog.ready_to_connect {
            // Break out of the TUI starts here
+        }
+    }
+
+    fn handle_connect_char_input(&mut self, to_enter: char) {
+        match self.connect_dialog.current_step {
+            Step::DatabaseInput => {
+                self.connect_dialog.database_name_input.enter_char(to_enter);
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_connect_backspace(&mut self) {
+        match self.connect_dialog.current_step {
+            Step::DatabaseInput => {
+                self.connect_dialog.database_name_input.delete_char();
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_connect_left(&mut self) {
+        match self.connect_dialog.current_step {
+            Step::DatabaseInput => {
+                self.connect_dialog.database_name_input.move_cursor_left();
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_connect_right(&mut self) {
+        match self.connect_dialog.current_step {
+            Step::DatabaseInput => {
+                self.connect_dialog.database_name_input.move_cursor_right();
+            },
+            _ => {},
         }
     }
 

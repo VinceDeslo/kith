@@ -1,13 +1,22 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     widgets::{Block, Borders, Clear, Padding, Paragraph, Widget},
     Frame
 };
 
+use crate::widgets::dialog::get_dialog_layout;
+
 pub struct SearchDialog {
     pub search: String,
     cursor_index: usize,
+}
+
+impl Widget for &SearchDialog {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let reduced_area = get_dialog_layout(30, 10, area);
+        self.render_search(reduced_area, buf);
+    }
 }
 
 impl SearchDialog {
@@ -31,7 +40,7 @@ impl SearchDialog {
     }
 
     pub fn set_cursor(&self, frame: &mut Frame, area: Rect) {
-        let reduced_area = get_search_dialog_layout(30, 10, area);
+        let reduced_area = get_dialog_layout(30, 10, area);
 
         // Increment positions by two due to padding on the paragraph block
         let x_position = reduced_area.x + self.cursor_index as u16 + 2;
@@ -78,30 +87,4 @@ impl SearchDialog {
         let char_count = self.search.chars().count();
         return index.clamp(0, char_count)
     }
-}
-
-impl Widget for &SearchDialog {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let reduced_area = get_search_dialog_layout(30, 10, area);
-        self.render_search(reduced_area, buf);
-    }
-}
-
-pub fn get_search_dialog_layout(percent_x: u16, percent_y: u16, rectangle: Rect) -> Rect {
-    let margin_x = (100 - percent_x) / 2;
-    let margin_y = (100 - percent_y) / 2;
-
-    let popup_layout = Layout::vertical([
-        Constraint::Percentage(margin_y),
-        Constraint::Percentage(percent_y),
-        Constraint::Percentage(margin_y),
-    ])
-    .split(rectangle);
-
-    Layout::horizontal([
-        Constraint::Percentage(margin_x),
-        Constraint::Percentage(percent_x),
-        Constraint::Percentage(margin_x),
-    ])
-    .split(popup_layout[1])[1]
 }
