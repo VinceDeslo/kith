@@ -1,7 +1,7 @@
 [package]
 name = "kith"
 description = "A TUI for accessing Teleport databases"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Vincent Desloover <vincent.desloover.dev@gmail.com>"]
 edition = "2021"
 license = "MIT"
