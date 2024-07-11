@@ -85,4 +85,6 @@ miscellaneous side projects. If you wish to add any functionality, feel free to 
 
 ### Screenshots / Recordings
 
-TBC... (This will require some test data, and I may be too lazy to mock such a thing)
+Here's an example of the TUI when using fake data locally:
+
+![Demo Gif](https://github.com/VinceDeslo/kith/blob/main/demo/kith-local-demo.gif)
