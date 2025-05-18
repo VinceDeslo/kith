@@ -1,5 +1,5 @@
 use std::env;
-use log::debug;
+use tracing::{event, Level};
 
 #[derive(Debug, Default)]
 pub struct Config {
@@ -22,19 +22,20 @@ impl Config {
 
     fn get_tsh_proxy(&mut self) {
         if let Ok(kith_tsh_proxy) = env::var("KITH_TSH_PROXY") {
-            debug!("Your teleport proxy value is: {}", kith_tsh_proxy);
+
+            event!(Level::DEBUG, "Your teleport proxy value is: {}", kith_tsh_proxy);
             self.tsh_proxy = kith_tsh_proxy;
         } else {
-            debug!("The KITH_TSH_PROXY environment variable is not set.");
+            event!(Level::DEBUG, "The KITH_TSH_PROXY environment variable is not set.");
         }
     }
 
     fn get_tsh_cluster(&mut self) {
         if let Ok(kith_tsh_cluster) = env::var("KITH_TSH_CLUSTER") {
-            debug!("Your teleport cluster value is: {}", kith_tsh_cluster);
+            event!(Level::DEBUG, "Your teleport cluster value is: {}", kith_tsh_cluster);
             self.tsh_cluster = kith_tsh_cluster;
         } else {
-            debug!("The KITH_TSH_CLUSTER environment variable is not set.");
+            event!(Level::DEBUG, "The KITH_TSH_CLUSTER environment variable is not set.");
         }
     }
 }
