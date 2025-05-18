@@ -8,7 +8,12 @@ license = "MIT"
 
 [dependencies]
 crossterm = "0.27.0"
+dirs = "6.0.0"
 dotenv = "0.15.0"
-env_logger = "0.11.3"
-log = "0.4.21"
 ratatui = "0.27.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-error = "0.2.1"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

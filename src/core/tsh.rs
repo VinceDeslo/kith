@@ -1,6 +1,40 @@
 #![allow(unused)]
-use std::{collections::HashMap, fmt::format, io::{BufRead, BufReader}, process::{Command, Stdio}};
-use log::{error, info, debug};
+use std::{collections::HashMap, fmt::format, io::{BufRead, BufReader}, iter::Map, process::{Command, Stdio}};
+use tracing::{event, Level};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct Database {
+    meta: Meta,
+    spec: Spec,
+}
+
+#[derive(Debug, Deserialize)]
+struct Meta {
+    name: String,
+    description: String,
+    revision: String,
+    labels: HashMap<String, String>
+}
+
+#[derive(Debug, Deserialize)]
+struct Spec {
+    protocol: String,
+    uri: String,
+    aws: AwsSpec,
+    gcp: GcpSpec,
+}
+
+#[derive(Debug, Deserialize)]
+struct AwsSpec {
+    region: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GcpSpec {
+    project_id: Option<String>,
+    instance_id: Option<String>,
+}
 
 enum Lines {
     Separators,
@@ -73,6 +107,7 @@ pub struct Tsh {
     column_widths: Vec<usize>,
     raw_entries: Vec<String>,
     pub entries: Vec<DatabaseEntry>,
+    databases: Vec<Database>,
 }
 
 impl Tsh {
@@ -82,11 +117,12 @@ impl Tsh {
             column_widths: vec![],
             raw_entries: vec![],
             entries: vec![],
+            databases: vec![],
         }
     }
 
     pub fn login(&self, proxy_name: &str, cluster: &str) {
-        debug!("logging into teleport");
+        event!(Level::DEBUG, "logging into teleport");
 
         let proxy = format!("--proxy={}", proxy_name);
 
@@ -98,14 +134,14 @@ impl Tsh {
         match teleport_cmd {
             Ok(teleport_cmd) => {
                 if let Ok(stdout) = String::from_utf8(teleport_cmd.stdout) {
-                    debug!("teleport login output");
-                    debug!("{}", stdout)
+                    event!(Level::DEBUG, "teleport login output");
+                    event!(Level::DEBUG, stdout);
                 } else {
-                    error!("failed to parse stdout from teleport login")
+                    event!(Level::ERROR, "failed to parse stdout from teleport login");
                 }
             }
             Err(err) => {
-                error!("failed to get ouput from teleport login: {}", err);
+                event!(Level::ERROR, "failed to get ouput from teleport login: {}", err);
             }
         }
     }
@@ -115,7 +151,7 @@ impl Tsh {
     // in the current terminal session. Also ensures that we don't have any zombie processes.
     // This should eventually be refactored into an OS agnostic approach.
     pub fn connect(&self, args: ConnectionArgs) {
-        info!("Connecting...");
+        event!(Level::INFO, "Connecting...");
 
         let connection_command = format!(
             "tsh db connect --db-user={} --db-name={} {}",
@@ -134,7 +170,7 @@ impl Tsh {
             connection_command,
         );
 
-        info!("{}", script);
+        event!(Level::INFO, script);
 
         let status = Command::new("osascript")
             .arg("-e")
@@ -143,7 +179,7 @@ impl Tsh {
             .expect("failed to execute AppleScript");
 
         if !status.success() {
-            error!("teleport database connection failed with status: {}", status);
+            event!(Level::ERROR, "teleport database connection failed with status: {}", status);
         }
     }
 
@@ -156,12 +192,13 @@ impl Tsh {
     }
 
     pub fn read_databases(&mut self, database_name: &str) {
-        debug!("reading teleport databases");
+        event!(Level::DEBUG, "reading teleport databases");
 
         // Ensure we are disconnected from any instances
         self.disconnect();
 
         let search = format!("--search={}", database_name);
+        let format = format!("--format={}", "json");
     
         let teleport_cmd = Command::new("tsh")
             .args(["db", "ls", "-v", &search])
@@ -170,24 +207,28 @@ impl Tsh {
             .expect("failed to list teleport databases");
 
         let out = teleport_cmd.stdout.expect("failed to open stdout");
-    
-        let reader = BufReader::new(out);
 
-        for line in reader.lines() {
-            let line_val = line.expect("failed to read line from stdout");
-            self.lines.push(line_val);
+        let mut reader = BufReader::new(out);
+        let db_list: Vec<Database> = serde_json::
+            from_reader(&mut reader)
+            .unwrap_or(vec![]);
+
+        for db in db_list {
+            let db_name = db.meta.name.clone();
+            event!(Level::DEBUG, "database: {}", db_name);
+            self.databases.push(db);
         }
         
-        debug!("parsing teleport databases");
-        self.parse_separators();
-        self.parse_raw_entries();
-        self.parse_entries();
+        // event!(Level::DEBUG, "parsing teleport databases");
+        // self.parse_separators();
+        // self.parse_raw_entries();
+        // self.parse_entries();
     }
 
     // column widths are parsed from the second line of Teleport 
     // command output. These can be used to know what columns may be empty
     fn parse_separators(&mut self) {
-        debug!("parsing separators");
+        event!(Level::DEBUG, "parsing separators");
 
         let column_separators = &self.lines[Lines::Separators.to_usize()];
 
@@ -197,11 +238,11 @@ impl Tsh {
             .filter(|column_width| *column_width != 0)
             .collect();
 
-        debug!("{:?}", self.column_widths);
+        event!(Level::DEBUG, "{:?}", self.column_widths);
     }
 
     fn parse_raw_entries(&mut self) {
-        debug!("parsing raw entries");
+        event!(Level::DEBUG, "parsing raw entries");
 
         let raw_entries = &self.lines[Lines::FirstEntry.to_usize()..];
 
@@ -211,11 +252,11 @@ impl Tsh {
             .filter(|raw_entry| !raw_entry.is_empty())
             .collect();
 
-        debug!("{:?}", self.raw_entries);
+        event!(Level::DEBUG, "{:?}", self.raw_entries);
     }
 
     fn parse_entries(&mut self) {
-        debug!("parsing entries");
+        event!(Level::DEBUG, "parsing entries");
 
         let column_widths = self.column_widths.clone();
 
@@ -273,7 +314,7 @@ impl Tsh {
             })
             .collect();
 
-        debug!("{:?}", self.entries);
+        event!(Level::DEBUG, "{:?}", self.entries);
     }
 }
 
@@ -288,19 +329,19 @@ fn get_column_bounds(column_index: usize, column_widths: Vec<usize>) -> (usize, 
 }
 
 fn parse_column(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> String {
-    debug!("Parsing column: {}", column.to_string());
+    event!(Level::DEBUG, "Parsing column: {}", column.to_string());
 
     let width = column_widths[column.to_usize()];
 
     let bounds = get_column_bounds(column.to_usize(), column_widths.to_vec());
 
-    debug!("Column bounds: ({}, {})", bounds.0, bounds.1);
+    event!(Level::DEBUG, "Column bounds: ({}, {})", bounds.0, bounds.1);
 
     let column_value = raw_entry
         .split_at(bounds.0).1
         .split_at(width).0;
 
-    debug!("{}\n", column_value);
+    event!(Level::DEBUG, "{}", column_value);
 
     return column_value.trim().to_string();
 }

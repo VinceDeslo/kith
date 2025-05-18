@@ -13,3 +13,6 @@ debug:
 
 info:
 	RUST_LOG=info cargo run src/main.rs
+
+logs:
+    cat ~/Library/Logs/kith/cli.log
