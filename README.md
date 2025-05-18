@@ -61,9 +61,9 @@ kith
 Clone the repo and fill out your Teleport values under `.env`. See `.example.env` for variable names.
 
 ```
-make run
-make info
-make debug
+just run
+just info
+just debug
 ```
 
 ### Uninstalling
