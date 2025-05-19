@@ -5,16 +5,22 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct Database {
-    meta: Meta,
+    metadata: Metadata,
     spec: Spec,
+    users: Users,
 }
 
 #[derive(Debug, Deserialize)]
-struct Meta {
+struct Metadata {
     name: String,
     description: String,
     revision: String,
     labels: HashMap<String, String>
+}
+
+#[derive(Debug, Deserialize)]
+struct Users {
+    allowed: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -201,7 +207,7 @@ impl Tsh {
         let format = format!("--format={}", "json");
     
         let teleport_cmd = Command::new("tsh")
-            .args(["db", "ls", "-v", &search])
+            .args(["db", "ls", &search, &format])
             .stdout(Stdio::piped())
             .spawn()
             .expect("failed to list teleport databases");
@@ -211,10 +217,10 @@ impl Tsh {
         let mut reader = BufReader::new(out);
         let db_list: Vec<Database> = serde_json::
             from_reader(&mut reader)
-            .unwrap_or(vec![]);
+            .expect("failed to deserialize database list");
 
         for db in db_list {
-            let db_name = db.meta.name.clone();
+            let db_name = db.metadata.name.clone();
             event!(Level::DEBUG, "database: {}", db_name);
             self.databases.push(db);
         }
