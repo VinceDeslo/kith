@@ -6,24 +6,25 @@ use ratatui::{
         block::{Position, Title}, Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, StatefulWidget, Widget, Wrap
     }
 };
-use super::super::core::tsh::DatabaseEntry;
+use tracing::{event, Level};
+use super::super::core::tsh::Database;
 use crate::widgets::styles;
 
 #[derive(Debug, Default)]
 pub struct StatefulDatabaseList {
     pub state: ListState,
-    pub items: Vec<DatabaseEntry>,
+    pub items: Vec<Database>,
 }
 
 impl StatefulDatabaseList {
     pub fn new() -> StatefulDatabaseList {
-        return StatefulDatabaseList {
+        StatefulDatabaseList {
             state: ListState::default(),
             items: vec![],
         }
     }
 
-    pub fn with_items(&mut self, items: Vec<DatabaseEntry>) {
+    pub fn with_items(&mut self, items: Vec<Database>) {
         self.items = items;
     }
 
@@ -41,7 +42,7 @@ impl StatefulDatabaseList {
             .iter()
             .enumerate()
             .map(|(i, item)| {
-                ListItem::from(item.name.clone())
+                ListItem::from(item.metadata.name.clone())
             })
             .collect();
 

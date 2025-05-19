@@ -3,102 +3,9 @@ use std::{collections::HashMap, fmt::format, io::{BufRead, BufReader}, iter::Map
 use tracing::{event, Level};
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
-struct Database {
-    metadata: Metadata,
-    spec: Spec,
-    users: Users,
-}
-
-#[derive(Debug, Deserialize)]
-struct Metadata {
-    name: String,
-    description: String,
-    revision: String,
-    labels: HashMap<String, String>
-}
-
-#[derive(Debug, Deserialize)]
-struct Users {
-    allowed: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Spec {
-    protocol: String,
-    uri: String,
-    aws: AwsSpec,
-    gcp: GcpSpec,
-}
-
-#[derive(Debug, Deserialize)]
-struct AwsSpec {
-    region: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GcpSpec {
-    project_id: Option<String>,
-    instance_id: Option<String>,
-}
-
-enum Lines {
-    Separators,
-    FirstEntry,
-}
-
-impl Lines {
-    fn to_usize(&self) -> usize {
-        match self {
-            // Index 0 would be the column names, but these are hard coded instead.
-            Lines::Separators => 1,
-            Lines::FirstEntry => 2,
-        }
-    }
-}
-
-// Column definitions can be found in the Teleport repo
-// https://github.com/gravitational/teleport/blob/abc6511f4016a4695062d53076b96ed1d05fec72/tool/tsh/common/db_print.go#L33
-enum Columns {
-    Name,
-    Description,
-    Protocol,
-    DatabaseType,
-    Uri,
-    AllowedUsers,
-    DatabaseRoles,
-    Labels,
-    Connect,
-}
-
-impl Columns {
-    fn to_usize(&self) -> usize {
-        match self {
-            Columns::Name => 0,
-            Columns::Description => 1,
-            Columns::Protocol => 2,
-            Columns::DatabaseType => 3,
-            Columns::Uri => 4,
-            Columns::AllowedUsers => 5,
-            Columns::DatabaseRoles => 6,
-            Columns::Labels => 7,
-            Columns::Connect => 8,
-        }
-    }
-
-    fn to_string(&self) -> &str {
-        match self {
-            Columns::Name => "Name",
-            Columns::Description => "Description",
-            Columns::Protocol => "Protocol",
-            Columns::DatabaseType => "Database Type",
-            Columns::Uri => "URI",
-            Columns::AllowedUsers => "Allowed Users",
-            Columns::DatabaseRoles => "Database Roles",
-            Columns::Labels => "Labels",
-            Columns::Connect => "Connect",
-        }
-    }
+#[derive(Debug, Default)]
+pub struct Tsh {
+    pub databases: Vec<Database>,
 }
 
 pub struct ConnectionArgs {
@@ -107,24 +14,9 @@ pub struct ConnectionArgs {
     pub db_name: String,
 }
 
-#[derive(Debug, Default)]
-pub struct Tsh {
-    lines: Vec<String>,
-    column_widths: Vec<usize>,
-    raw_entries: Vec<String>,
-    pub entries: Vec<DatabaseEntry>,
-    databases: Vec<Database>,
-}
-
 impl Tsh {
     pub fn new() -> Tsh {
-        return Tsh {
-            lines: vec![],
-            column_widths: vec![],
-            raw_entries: vec![],
-            entries: vec![],
-            databases: vec![],
-        }
+        Tsh { databases: vec![] }
     }
 
     pub fn login(&self, proxy_name: &str, cluster: &str) {
@@ -133,7 +25,7 @@ impl Tsh {
         let proxy = format!("--proxy={}", proxy_name);
 
         let teleport_cmd = Command::new("tsh")
-            .args(["login", &proxy, &cluster])
+            .args(["login", &proxy, cluster])
             .stdout(Stdio::piped())
             .output();
 
@@ -224,196 +116,99 @@ impl Tsh {
             event!(Level::DEBUG, "database: {}", db_name);
             self.databases.push(db);
         }
-        
-        // event!(Level::DEBUG, "parsing teleport databases");
-        // self.parse_separators();
-        // self.parse_raw_entries();
-        // self.parse_entries();
-    }
-
-    // column widths are parsed from the second line of Teleport 
-    // command output. These can be used to know what columns may be empty
-    fn parse_separators(&mut self) {
-        event!(Level::DEBUG, "parsing separators");
-
-        let column_separators = &self.lines[Lines::Separators.to_usize()];
-
-        self.column_widths = column_separators
-            .split(" ")
-            .map(|separator| separator.len())
-            .filter(|column_width| *column_width != 0)
-            .collect();
-
-        event!(Level::DEBUG, "{:?}", self.column_widths);
-    }
-
-    fn parse_raw_entries(&mut self) {
-        event!(Level::DEBUG, "parsing raw entries");
-
-        let raw_entries = &self.lines[Lines::FirstEntry.to_usize()..];
-
-        self.raw_entries = raw_entries
-            .into_iter()
-            .map(|raw_entry| raw_entry.to_string())
-            .filter(|raw_entry| !raw_entry.is_empty())
-            .collect();
-
-        event!(Level::DEBUG, "{:?}", self.raw_entries);
-    }
-
-    fn parse_entries(&mut self) {
-        event!(Level::DEBUG, "parsing entries");
-
-        let column_widths = self.column_widths.clone();
-
-        self.entries = self.raw_entries
-            .clone()
-            .into_iter()
-            .map(|raw_entry| {
-                DatabaseEntry { 
-                    name: parse_column(
-                        Columns::Name,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    description: parse_column(
-                        Columns::Description,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    protocol: parse_column(
-                        Columns::Protocol,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    database_type: parse_column(
-                        Columns::DatabaseType,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    uri: parse_column(
-                        Columns::Uri,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    allowed_users: parse_allowed_users(
-                        Columns::AllowedUsers,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    database_roles: parse_column(
-                        Columns::DatabaseRoles,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    labels: parse_labels(
-                        Columns::Labels,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                    connect: parse_column(
-                        Columns::Connect,
-                        &raw_entry,
-                        &column_widths,
-                    ),
-                }
-            })
-            .collect();
-
-        event!(Level::DEBUG, "{:?}", self.entries);
     }
 }
 
-fn get_column_bounds(column_index: usize, column_widths: Vec<usize>) -> (usize, usize) {
-    let sum = column_widths
-        .iter()
-        .take(column_index)
-        .map(|width| width + 1) // Accomodate the extra space between columns
-        .sum();
-
-    return (sum, sum + column_widths[column_index]);
+#[derive(Debug, Clone, Deserialize)]
+pub struct Database {
+    pub metadata: Metadata,
+    pub spec: Spec,
+    pub users: Users,
 }
 
-fn parse_column(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> String {
-    event!(Level::DEBUG, "Parsing column: {}", column.to_string());
-
-    let width = column_widths[column.to_usize()];
-
-    let bounds = get_column_bounds(column.to_usize(), column_widths.to_vec());
-
-    event!(Level::DEBUG, "Column bounds: ({}, {})", bounds.0, bounds.1);
-
-    let column_value = raw_entry
-        .split_at(bounds.0).1
-        .split_at(width).0;
-
-    event!(Level::DEBUG, "{}", column_value);
-
-    return column_value.trim().to_string();
-}
-
-fn parse_allowed_users(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> Vec<String> {
-    let column_value = parse_column(column, raw_entry, column_widths);
-
-    return column_value
-        .replace("[", "")
-        .replace("]", "")
-        .split(" ")
-        .map(|user| user.to_string())
-        .collect();
-}
-
-fn parse_labels(column: Columns, raw_entry: &String, column_widths: &Vec<usize>) -> HashMap<String, String> {
-    let column_value = parse_column(column, raw_entry, column_widths);
-
-    let mut map: HashMap<String, String> = HashMap::new();
-
-    column_value
-        .split(",")
-        .map(|label| label_to_key_value(label))
-        .for_each(|parsed_label| {
-            map.insert(parsed_label.0, parsed_label.1);
-        });
-
-    return map;
-}
-
-fn label_to_key_value(label: &str) -> (String, String) {
-    let label_members: Vec<&str> = label.split("=").collect();
-    let key = label_members[0].to_string();
-    let value = label_members[1].to_string();
-    (key, value)
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct DatabaseEntry {
+#[derive(Debug, Clone, Deserialize)]
+pub struct Metadata {
     pub name: String,
-    pub allowed_users: Vec<String>,
-    description: String,
-    protocol: String,
-    database_type: String,
-    uri: String,
-    database_roles: String,
-    labels: HashMap<String, String>,
-    connect: String,
+    pub description: String,
+    pub revision: String,
+    pub labels: HashMap<String, String>
 }
 
-impl DatabaseEntry {
+#[derive(Debug, Clone, Deserialize)]
+pub struct Users {
+    pub allowed: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Spec {
+    pub protocol: String,
+    pub uri: String,
+    pub aws: AwsSpec,
+    pub gcp: GcpSpec,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AwsSpec {
+    pub region: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GcpSpec {
+    pub project_id: Option<String>,
+    pub instance_id: Option<String>,
+}
+
+enum Fields {
+    Name,
+    Description,
+    Protocol,
+    Uri,
+    AwsRegion,
+    GcpProject,
+    GcpInstance,
+    AllowedUsers,
+    Labels,
+}
+
+impl Fields {
+    fn to_string(&self) -> &str {
+        match self {
+            Fields::Name => "Name",
+            Fields::Description => "Description",
+            Fields::Protocol => "Protocol",
+            Fields::Uri => "URI",
+            Fields::AwsRegion => "AWS Region",
+            Fields::GcpProject => "GCP Project",
+            Fields::GcpInstance => "GCP Instance",
+            Fields::AllowedUsers => "Allowed Users",
+            Fields::Labels => "Labels",
+        }
+    }
+}
+
+impl Database {
     pub fn connect(&self, db_name: String, db_user: String) {
         let db_user_arg = format!("--db-user={}", db_user);
         let db_name_arg = format!("--db-name={}", db_name);
 
-        Command::new("tsh")
+        let mut cmd = Command::new("tsh")
             .args([
                 "db",
                 "connect",
                 db_user_arg.as_str(),
                 db_name_arg.as_str(),
-                self.name.as_str(),
+                self.metadata.name.as_str(),
             ])
             .stdout(Stdio::piped())
             .spawn()
-            .expect("failed to connect to database");
+            .expect("failed to spawn database connection command");
+
+        let status = cmd.wait().expect("failed to wait on connection cmd");
+        if status.success() {
+            event!(Level::INFO, "tsh connection command succeeded");
+        } else {
+            event!(Level::ERROR, "tsh connection command failed");
+        }
     }
 
     pub fn format_details(&self) -> String {
@@ -421,85 +216,96 @@ impl DatabaseEntry {
 
         let name = format!(
             "{}: {}\n", 
-            Columns::Name.to_string(), 
-            self.name
+            Fields::Name.to_string(), 
+            self.metadata.name
         );
         details.push_str(name.as_str());
 
         let description = format!(
             "{}: {}\n", 
-            Columns::Description.to_string(), 
-            self.description
+            Fields::Description.to_string(), 
+            self.metadata.name
         );
         details.push_str(description.as_str());
-        
+
         let protocol = format!(
             "{}: {}\n",
-            Columns::Protocol.to_string(),
-            self.protocol
+            Fields::Protocol.to_string(),
+            self.spec.protocol
         );
         details.push_str(protocol.as_str());
-        
-        let database_type = format!(
-            "{}: {}\n", 
-            Columns::DatabaseType.to_string(),
-            self.database_type
-        );
-        details.push_str(database_type.as_str());
-        
+
         let uri = format!(
             "{}: {}\n", 
-            Columns::Uri.to_string(), 
-            self.uri
+            Fields::Uri.to_string(), 
+            self.spec.uri
         );
         details.push_str(uri.as_str());
 
-        let allowed_users_list = self.allowed_users
+        let is_aws = self.spec.aws.region.is_some();
+        if is_aws {
+            let aws_region = format!(
+                "{}: {}\n",
+                Fields::AwsRegion.to_string(),
+                self.spec.aws.region
+                    .clone()
+                    .unwrap_or("unknown".to_string()),
+            );
+            details.push_str(aws_region.as_str());
+        }
+        let is_gcp = self.spec.gcp.project_id.is_some();
+        if is_gcp {
+            let gcp_project = format!(
+                "{}: {}\n",
+                Fields::GcpProject.to_string(),
+                self.spec.gcp.project_id
+                    .clone()
+                    .unwrap_or("unknown".to_string()),
+            );
+            details.push_str(gcp_project.as_str());
+
+            let gcp_instance = format!(
+                "{}: {}\n",
+                Fields::GcpInstance.to_string(),
+                self.spec.gcp.instance_id
+                    .clone()
+                    .unwrap_or("unknown".to_string()),
+            );
+            details.push_str(gcp_instance.as_str());
+        }
+
+        let allowed_users_list = self.users.allowed
             .iter()
             .fold(String::new(), |mut accumulator, element| {
                 accumulator.push_str(
                     format!("  - {}\n", element).as_str()
                 );
-                return accumulator
+                accumulator
             });
 
         let allowed_users = format!(
             "{}:\n{}",
-            Columns::AllowedUsers.to_string(),
+            Fields::AllowedUsers.to_string(),
             allowed_users_list
         );
         details.push_str(allowed_users.as_str());
 
-        let database_roles = format!(
-            "{}: {}\n", 
-            Columns::DatabaseRoles.to_string(), 
-            self.database_roles
-        );
-        details.push_str(database_roles.as_str());
-
-        let labels_list = self.labels
+        let labels_list = self.metadata.labels
             .iter()
             .fold(String::new(), |mut accumulator, element| {
                 accumulator.push_str(
                     format!("  - {}: {}\n", element.0, element.1).as_str()
                 );
-                return accumulator
+                accumulator
             });
 
         let labels  = format!(
             "{}:\n{}",
-            Columns::Labels.to_string(),
+            Fields::Labels.to_string(),
             labels_list
         );
         details.push_str(labels.as_str());
 
-        let connect = format!(
-            "{}: {}\n",
-            Columns::Connect.to_string(),
-            self.connect
-        );
-        details.push_str(connect.as_str());
-
-        return details;
+        details
     }
 }
