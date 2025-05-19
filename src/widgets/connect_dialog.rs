@@ -2,7 +2,7 @@
 use ratatui::{buffer::Buffer, layout::Rect, widgets::{Block, Borders, Clear, Padding, Widget}};
 
 use crate::{
-    core::tsh::{self, ConnectionArgs, DatabaseEntry},
+    core::tsh::{self, ConnectionArgs, Database},
     widgets::{
         confirmation_toggle::{ConfirmationOption, ConfirmationToggle},
         database_name_input::{self, DatabaseNameInput},
@@ -22,7 +22,7 @@ pub struct ConnectDialog {
     pub database_name_input: DatabaseNameInput,
     pub confirmation_toggle: ConfirmationToggle,
     pub ready_to_connect: Option<bool>,
-    pub selected_entry: Option<DatabaseEntry>,
+    pub selected_entry: Option<Database>,
     pub db_name: String,
     pub db_user: String,
     pub current_step: Step,
@@ -82,7 +82,7 @@ impl ConnectDialog {
 
     pub fn to_connection_args(&self) -> ConnectionArgs {
         return ConnectionArgs {
-            instance: self.selected_entry.as_ref().unwrap().name.clone(),
+            instance: self.selected_entry.as_ref().unwrap().metadata.name.clone(),
             db_name: self.db_name.clone(),
             db_user: self.db_user.clone()
         }

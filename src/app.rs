@@ -39,7 +39,7 @@ pub struct App {
 
 impl App {
     pub fn new(config: Config) -> App {
-        return App {
+        App {
             teleport: Tsh::new(),
             config,
             database_list: StatefulDatabaseList::new(),
@@ -253,7 +253,7 @@ impl App {
     }
 
     fn set_database_list_state(&mut self) {
-        self.database_list.with_items(self.teleport.entries.to_vec());
+        self.database_list.with_items(self.teleport.databases.to_vec());
     }
 
     fn handle_database_list_next(&mut self) {
@@ -267,7 +267,7 @@ impl App {
     fn set_user_list_state(&mut self) {
         match &self.connect_dialog.selected_entry {
             Some(entry) => {
-                self.connect_dialog.user_list.with_items(entry.allowed_users.clone());
+                self.connect_dialog.user_list.with_items(entry.users.allowed.clone());
             },
             None => {},
         }
@@ -299,7 +299,7 @@ impl Widget for &App {
 
         render_header(header_area, buf);
 
-        if self.teleport.entries.len() != 0 {
+        if !self.teleport.databases.is_empty() {
             self.database_list.render(main_area, buf);
         }
         if self.show_search {
