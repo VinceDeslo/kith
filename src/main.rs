@@ -59,4 +59,11 @@ fn get_log_dir() -> PathBuf {
             .expect("failed to fetch home dir");
         home_dir.join("Library/Logs/kith")
     }
+    #[cfg(target_os = "linux")]
+    {
+        // ~/.kith/...
+        let home_dir = dirs::home_dir()
+            .expect("failed to fetch home dir");
+        home_dir.join(".kith")
+    }
 }
